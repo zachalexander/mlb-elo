@@ -13,6 +13,11 @@
 #    - excluded_games.csv           : List of excluded games due to unmapped teams
 #
 # Includes logging and error handling for transparency and robustness.
+#
+# Elo enhancements:
+# - Home Field Advantage (+35 Elo boost for home team)
+# - Margin of Victory Scaling (larger Elo shifts for blowout wins)
+# - All enhancements are toggleable using USE_HOME_FIELD_ADVANTAGE and USE_MARGIN_OF_VICTORY
 
 import boto3
 import zipfile
@@ -113,6 +118,10 @@ def preprocess(df):
         logging.error(f"Error calculating Elo ratings: {e}")
         raise
 
+# Elo enhancement toggles
+USE_HOME_FIELD_ADVANTAGE = True
+USE_MARGIN_OF_VICTORY = True
+
 def calculate_elo(df):
     try:
         base_elo = 1500
@@ -130,7 +139,12 @@ def calculate_elo(df):
             home_elo = team_elos.get(home, base_elo)
             away_elo = team_elos.get(away, base_elo)
 
-            expected_home = 1 / (1 + 10 ** ((away_elo - home_elo) / 400))
+            if USE_HOME_FIELD_ADVANTAGE:
+                home_field_advantage = 35
+            else:
+                home_field_advantage = 0
+
+            expected_home = 1 / (1 + 10 ** ((away_elo - (home_elo + home_field_advantage)) / 400))
             expected_away = 1 - expected_home
 
             if home_score > away_score:
@@ -140,8 +154,16 @@ def calculate_elo(df):
             else:
                 actual_home = actual_away = 0.5
 
-            home_elo_new = home_elo + k * (actual_home - expected_home)
-            away_elo_new = away_elo + k * (actual_away - expected_away)
+            if USE_MARGIN_OF_VICTORY:
+                margin = abs(home_score - away_score)
+                denom = max(7.5 + 0.006 * abs(home_elo - away_elo), 1.0)
+                multiplier = ((margin + 1) ** 0.8) / denom
+                multiplier = min(multiplier, 3.0)
+            else:
+                multiplier = 1.0
+
+            home_elo_new = home_elo + k * multiplier * (actual_home - expected_home)
+            away_elo_new = away_elo + k * multiplier * (actual_away - expected_away)
 
             team_elos[home] = home_elo_new
             team_elos[away] = away_elo_new
