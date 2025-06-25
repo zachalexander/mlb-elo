@@ -15,9 +15,10 @@
 # Includes logging and error handling for transparency and robustness.
 #
 # Elo enhancements:
-# - Home Field Advantage (+35 Elo boost for home team)
+# - Home Field Advantage (+35 Elo boost when calculating expected win probability only)
 # - Margin of Victory Scaling (larger Elo shifts for blowout wins)
-# - All enhancements are toggleable using USE_HOME_FIELD_ADVANTAGE and USE_MARGIN_OF_VICTORY
+# - Playoff Weighting (K-factor *1.5 for early playoff games, *2.0 for games in October)
+# - All enhancements are toggleable using USE_HOME_FIELD_ADVANTAGE, USE_MARGIN_OF_VICTORY, and USE_PLAYOFF_WEIGHTING
 
 import boto3
 import zipfile
@@ -110,6 +111,7 @@ def preprocess(df):
                 s3.put_object(Bucket=OUTPUT_BUCKET, Key='excluded_games.csv', Body=f.read())
 
         df = df[df['home_team'].notna() & df['visiting_team'].notna()]
+        df['game_type'] = df['game_number'].apply(lambda x: 'P' if isinstance(x, str) and not x.isdigit() else 'R')
         df = df.dropna(subset=['date'])
         logging.info(f"Preprocessed dataframe with {len(df)} games (excluded {original_len - len(df)} games).")
         logging.info(f"Date range of games: {df['date'].min().date()} to {df['date'].max().date()}")
@@ -119,6 +121,7 @@ def preprocess(df):
         raise
 
 # Elo enhancement toggles
+USE_PLAYOFF_WEIGHTING = True
 USE_HOME_FIELD_ADVANTAGE = True
 USE_MARGIN_OF_VICTORY = True
 
@@ -130,6 +133,16 @@ def calculate_elo(df):
         results = []
 
         for _, row in df.iterrows():
+            k_factor = k
+            if USE_PLAYOFF_WEIGHTING and row.get('game_type') == 'P':
+                # Different playoff rounds can be distinguished by source_file or another indicator
+                game_date = row['date']
+                if game_date.month >= 10:
+                    # Approximate deeper playoff weighting in October (e.g. ALCS, NLCS, WS)
+                    k_factor *= 2.0
+                else:
+                    # Early postseason (e.g. Wild Card, LDS)
+                    k_factor *= 1.5
             date = row['date']
             home = row['home_team']
             away = row['visiting_team']
@@ -162,8 +175,8 @@ def calculate_elo(df):
             else:
                 multiplier = 1.0
 
-            home_elo_new = home_elo + k * multiplier * (actual_home - expected_home)
-            away_elo_new = away_elo + k * multiplier * (actual_away - expected_away)
+            home_elo_new = home_elo + k_factor * multiplier * (actual_home - expected_home)
+            away_elo_new = away_elo + k_factor * multiplier * (actual_away - expected_away)
 
             team_elos[home] = home_elo_new
             team_elos[away] = away_elo_new
