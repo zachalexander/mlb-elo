@@ -53,28 +53,29 @@ home_field_advantage = 35
 def expected_score(r1, r2):
     return 1 / (1 + 10 ** ((r2 - r1) / 400))
 
-def get_injury_penalty(team_abbr):
-    try:
-        full_team_name = [k for k, v in TEAM_ABBREV_MAP.items() if v == team_abbr]
-        if not full_team_name:
-            print(f"Could not resolve full team name for abbreviation: {team_abbr}")
-            return 0
-        team_id = statsapi.lookup_team(full_team_name[0])[0]['id']
-        roster = statsapi.get('team_roster', {'teamId': team_id, 'rosterType': 'injured'})
-        if isinstance(roster, str):
-            import json
-            roster = json.loads(roster)
-        if 'roster' in roster and isinstance(roster['roster'], list):
-            injured_players = roster['roster']
-            print(injured_players)
-        else:
-            injured_players = []
-        il_count = len(injured_players)
-        print(f"Team: {team_abbr}, Injured List Count: {il_count}")
-        return -10 if il_count > 3 else 0
-    except Exception as e:
-        print(f"Error retrieving injury list for team {team_abbr}: {e}")
-        return 0
+# def get_injury_penalty(team_abbr):
+#     try:
+#         full_team_name = [k for k, v in TEAM_ABBREV_MAP.items() if v == team_abbr]
+#         if not full_team_name:
+#             print(f"Could not resolve full team name for abbreviation: {team_abbr}")
+#             return 0
+#         team_id = statsapi.lookup_team(full_team_name[0])[0]['id']
+#         roster = statsapi.get('team_roster', {'teamId': team_id, 'rosterType': 'injured'})
+#         if isinstance(roster, str):
+#             import json
+#             roster = json.loads(roster)
+#         if 'roster' in roster and isinstance(roster['roster'], list):
+#             injured_players = roster['roster']
+#             print(injured_players)
+#         else:
+#             injured_players = []
+#         print(injured_players)
+#         il_count = len(injured_players)
+#         print(f"Team: {team_abbr}, Injured List Count: {il_count}")
+#         return -10 if il_count > 3 else 0
+#     except Exception as e:
+#         print(f"Error retrieving injury list for team {team_abbr}: {e}")
+#         return 0
 
 def update_elo(r1, r2, score_diff):
     mov_multiplier = (abs(score_diff) + 1) ** 0.8 / (7.5 + 0.006 * abs(r1 - r2))
@@ -97,7 +98,7 @@ def load_gamelogs_from_s3():
 def load_all_games():
     historical_df = load_gamelogs_from_s3()
     historical_df['date'] = pd.to_datetime(historical_df['date'], format='%Y%m%d')
-    historical_df = historical_df[['date', 'home_team', 'away_team', 'home_score', 'away_score']]
+    historical_df = historical_df[['date', 'away_team', 'home_team', 'away_score', 'home_score']]
 
     current_year = datetime.now(tz=pd.Timestamp.utcnow().tz).year
     try:
@@ -274,20 +275,20 @@ def calculate_elo():
             raw_home = ratings.get(home, 1500)
             raw_away = ratings.get(away, 1500)
             
-            table.put_item(Item={
-                'team_date': f"{home}#{date}",
-                'team': home,
-                'date': date,
-                'elo': Decimal(str(round(home_elo, 2))),
-                'elo_raw': Decimal(str(round(raw_home, 2)))
-            })
-            table.put_item(Item={
-                'team_date': f"{away}#{date}",
-                'team': away,
-                'date': date,
-                'elo': Decimal(str(round(away_elo, 2))),
-                'elo_raw': Decimal(str(round(raw_away, 2)))
-            })
+            # table.put_item(Item={
+            #     'team_date': f"{home}#{date}",
+            #     'team': home,
+            #     'date': date,
+            #     'elo': Decimal(str(round(home_elo, 2))),
+            #     'elo_raw': Decimal(str(round(raw_home, 2)))
+            # })
+            # table.put_item(Item={
+            #     'team_date': f"{away}#{date}",
+            #     'team': away,
+            #     'date': date,
+            #     'elo': Decimal(str(round(away_elo, 2))),
+            #     'elo_raw': Decimal(str(round(raw_away, 2)))
+            # })
 
     result_df = pd.DataFrame(updated_rows)
     result_df = result_df[result_df['home_team'].isin(TEAM_ABBREV_MAP.values()) & result_df['away_team'].isin(TEAM_ABBREV_MAP.values())]
