@@ -42,10 +42,10 @@ def fetch_latest_elo_ratings():
     items = response["Items"]
     latest_ratings = {}
     for item in items:
-        team = item["team_abbr"]
-        date = item["date"]
+        team = item["team"]
+        date = item["last_updated"]
         elo = float(item["elo"])
-        if team not in latest_ratings or date > latest_ratings[team]["date"]:
+        if team not in latest_ratings or date > latest_ratings[team]["last_updated"]:
             latest_ratings[team] = {"elo": elo, "date": date}
     return {team: val["elo"] for team, val in latest_ratings.items()}
 
