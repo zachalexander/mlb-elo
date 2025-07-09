@@ -186,10 +186,10 @@ def simulate_season(schedule_df, elo_ratings):
             "p90",
         ],
     )
+    today_str = pd.Timestamp.today().strftime("%Y-%m-%d")
+    summary_key = f"season_win_projection_summary_{today_str}.csv"
     s3.put_object(
-        Body=df_summary.to_csv(index=False),
-        Bucket=OUTPUT_BUCKET,
-        Key="season_win_projection_summary.csv",
+        Body=df_summary.to_csv(index=False), Bucket=OUTPUT_BUCKET, Key=summary_key
     )
 
 
